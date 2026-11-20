@@ -100,6 +100,8 @@ select:focus{border-color:var(--p)}
 .mt td{text-align:right;padding:7px 4px;border-bottom:1px solid var(--bd)}
 .mt th:first-child,.mt td:first-child{text-align:left}
 .mt tfoot td{font-weight:700;color:var(--p);border-bottom:0;border-top:2px solid var(--p)}
+.edited{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--p);margin-top:3px}
+.edited svg{width:12px;height:12px;flex:none}
 .copyright{position:absolute;left:0;right:0;bottom:0;z-index:4;text-align:center;font-size:12px;color:var(--mu);padding:10px 16px;background:var(--bg)}
 .seg{display:flex;gap:6px;padding:10px 0}
 .dtw{position:relative}
@@ -189,8 +191,11 @@ const lastAct=c=>{const m=c.txs.map(t=>t.dt).sort().pop();return m?(m>c.created?
 const sum=a=>a.reduce((x,y)=>x+y,0);
 /* An edited entry keeps the date it had before its first edit (orig) and when it was last edited (edited). */
 function markEdit(t,changed){if(!changed)return;if(!t.orig)t.orig=t.dt;t.edited=now()}
-function dateLines(t){const s='<div class="mu" style="font-size:13px;margin-top:2px">';if(!t.edited)return s+fmt(t.dt)+"</div>";
-  return s+(t.dt!==t.orig?"Date: "+fmt(t.dt)+"<br>":"")+"Original: "+fmt(t.orig)+'<br><span style="color:var(--p)">Edited: '+fmt(t.edited)+"</span></div>"}
+/* Entry date as usual; an edited entry adds a short "Edited on …" note, plus "Date changed from …" only when its date was changed */
+/* short date for these notes: "21 Nov, 03:01 am" (year added only when it isn't this year) */
+const fmtShort=s=>{try{const d=pd(s);return `${p2(d.getDate())} ${MON[d.getMonth()]}${d.getFullYear()!==new Date().getFullYear()?" "+d.getFullYear():""}, ${ft(d)}`}catch(e){return s}};
+function dateLines(t){const d='<div class="mu" style="font-size:13px;margin-top:2px">'+fmt(t.dt)+"</div>";if(!t.edited)return d;
+  return d+`<div class="edited">${svg("edit")}Edited ${fmtShort(t.edited)}</div>`+(t.orig&&t.orig!==t.dt?`<div class="mu" style="font-size:12px;margin-top:1px">Date was ${fmtShort(t.orig)}</div>`:"")}
 const cust=id=>D.customers.find(c=>c.id===id);
 const ICON={
  dash:'<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
