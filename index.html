@@ -838,7 +838,7 @@ window.addEventListener("popstate",()=>{if(S.tab==="due"&&S.open){S.open=null;re
 const _render=render;render=function(){_render();if(S.tab==="due"&&S.open&&!history.state?.l){history.pushState({l:1},"")}};
 /* reminder check every 15s */
 function checkReminder(){const at=D.reminderAt;if(!at)return;if(!(pd(at)>new Date())){update(d=>d.reminderAt=null);toast("Reminder: collect pending dues");try{if("Notification" in window&&Notification.permission==="granted")new Notification("DigiLedger",{body:"Collect pending dues"})}catch(e){}}}
-if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("sw.js").catch(()=>{});
+if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).catch(()=>{});
 load().then(()=>{render();checkReminder();setInterval(checkReminder,15000)});
 /* load Google's sign-in script early so tapping Auto Backup opens Google's window straight away */
 if(GOOGLE_CLIENT_ID)loadGIS().catch(()=>{});
