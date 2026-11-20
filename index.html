@@ -9,7 +9,6 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -663,11 +662,7 @@ function reminderSheet(){
 
 /* ================= Export ================= */
 function download(name,blob){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);toast("File saved")}
-function needLibs(){if(!window.XLSX||!window.jspdf){toast("Export libraries failed to load. Check your connection.");return false}return true}
-function bookXlsx(k,list,period){const T=KIND[k].title;
-  const rows=[[`${T} Report`],[`Period: ${period}`],[],["#","Date & Time","Service Category","Remarks","Amount (₹)"],...list.map((t,i)=>[i+1,fmt(t.dt),t.cat,t.rem,t.amt]),[],["","","","Total",sum(list.map(t=>t.amt))]];
-  const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=[5,24,28,34,16].map(w=>({wch:w}));ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:4}},{s:{r:1,c:0},e:{r:1,c:4}}];
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,T);return[`${T}_Report_${stamp()}.xlsx`,wb]}
+function needLibs(){if(!window.jspdf){toast("Export libraries failed to load. Check your connection.");return false}return true}
 function pdfReport(title,lines,head,body,foot,right,widths){
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:"pt",format:"a4"});doc.setFontSize(18);doc.text(title,40,50);doc.setFontSize(11);let y=72;lines.forEach(l=>{doc.text(l,40,y);y+=16});
   const cs={};widths.forEach((w,i)=>cs[i]={cellWidth:w,halign:right.includes(i)?"right":"left"});
@@ -684,9 +679,12 @@ function ledgerPdf(c){let r=0;const rows=[...c.txs].sort((a,b)=>a.dt.localeCompa
 let _ejs;
 function loadExcelJS(){if(window.ExcelJS)return Promise.resolve();
   return _ejs||(_ejs=new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";s.onload=res;s.onerror=()=>{_ejs=null;s.remove();rej(new Error("load"))};document.head.appendChild(s)}))}
-/* ---- Premium Expenditure report (ExcelJS), same look as the Due report ---- */
-async function expenseReport(list,period){
-  const C={teal:"FF0F5E66",tealD:"FF0A454B",soft:"FFE6F0F0",zebra:"FFF7FAFA",bd:"FFD5DCDC",g:"FF1E8E5A",r:"FFC0392B",rS:"FFFBE9E7",rD:"FF9B2C20",a:"FFB7791F",aS:"FFFDF3E1",mu:"FF68777A",tx:"FF1D2B2E",w:"FFFFFFFF"};
+/* ---- Colourful Income / Expenditure Excel report (ExcelJS), same look as the Due report.
+   Income uses green accents, Expenditure red. ---- */
+async function bookReport(k,list,period){
+  const T=KIND[k].title,inc=k==="income";
+  const C={teal:"FF0F5E66",tealD:"FF0A454B",soft:"FFE6F0F0",zebra:"FFF7FAFA",bd:"FFD5DCDC",g:"FF1E8E5A",r:"FFC0392B",rS:"FFFBE9E7",rD:"FF9B2C20",gS:"FFE3F4EB",gD:"FF156B43",a:"FFB7791F",aS:"FFFDF3E1",mu:"FF68777A",tx:"FF1D2B2E",w:"FFFFFFFF"};
+  const AC=inc?C.g:C.r,AS=inc?C.gS:C.rS,AD=inc?C.gD:C.rD;
   const FM='[>=10000000]"₹"##\\,##\\,##\\,##0.00;[>=100000]"₹"##\\,##\\,##0.00;"₹"##,##0.00',FN='"₹"#,##0.00',DF="dd-mmm-yyyy  hh:mm AM/PM",DD="dd-mmm-yyyy, ddd";
   const fill=c=>({type:"pattern",pattern:"solid",fgColor:{argb:c}}),thin={style:"thin",color:{argb:C.bd}},box={top:thin,left:thin,bottom:thin,right:thin};
   const money=(x,v)=>{x.value=v;x.numFmt=v<0?FN:FM;x.alignment={horizontal:"right",vertical:"middle"}};
@@ -695,7 +693,7 @@ async function expenseReport(list,period){
   const band=(ws,r,c1,c2,value,font,bg,h)=>{each(ws,r,c1,c2,x=>x.fill=fill(bg));ws.mergeCells(r,c1,r,c2);const x=ws.getCell(r,c1);x.value=value;x.font=font;x.alignment={vertical:"middle",horizontal:"left",indent:1};if(h)ws.getRow(r).height=h;return x};
   const head=(ws,r,labels,right,bg=C.teal)=>{labels.forEach((l,i)=>{const x=ws.getCell(r,i+1);x.value=l;x.font={bold:true,size:10,color:{argb:C.w}};x.fill=fill(bg);x.border=box;x.alignment={vertical:"middle",wrapText:true,horizontal:right.includes(i)?"right":l==="#"?"center":"left"}});ws.getRow(r).height=24};
   const page={orientation:"landscape",paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,margins:{left:.4,right:.4,top:.5,bottom:.6,header:.3,footer:.3}};
-  const footer={oddFooter:"&L&8&K68777ADigiLedger — Expenditure Report&R&8&K68777APage &P of &N"};
+  const footer={oddFooter:`&L&8&K68777ADigiLedger — ${T} Report&R&8&K68777APage &P of &N`};
   const gen=fmt(now()),rows=[...list].sort((a,b)=>a.dt.localeCompare(b.dt));
   const total=sum(rows.map(t=>t.amt)),n=rows.length,avg=n?total/n:0,top=rows.reduce((m,t)=>!m||t.amt>m.amt?t:m,null);
   const byCat={};rows.forEach(t=>{const c=byCat[t.cat]||(byCat[t.cat]={n:0,v:0});c.n++;c.v+=t.amt});
@@ -705,18 +703,18 @@ async function expenseReport(list,period){
   const wb=new ExcelJS.Workbook();wb.creator="DigiLedger";wb.created=new Date();
 
   /* ===== Sheet 1: Summary ===== */
-  const ws=wb.addWorksheet("Summary",{properties:{tabColor:{argb:C.r}},views:[{showGridLines:false}],pageSetup:page,headerFooter:footer});
+  const ws=wb.addWorksheet("Summary",{properties:{tabColor:{argb:AC}},views:[{showGridLines:false}],pageSetup:page,headerFooter:footer});
   ws.columns=[6,30,14,20,22,6].map(w=>({width:w}));
-  band(ws,1,1,5,"Expenditure Report",{size:20,bold:true,color:{argb:C.w}},C.teal,40);
+  band(ws,1,1,5,`${T} Report`,{size:20,bold:true,color:{argb:C.w}},C.teal,40);
   band(ws,2,1,5,`Period: ${period}  ·  Generated on ${gen}`,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,20);
   ws.getRow(3).height=10;
-  const tiles=[[1,2,"TOTAL EXPENDITURE",total,true,C.r,C.rS],[3,3,"ENTRIES",n,false,C.teal,C.soft],[4,4,"AVERAGE / ENTRY",avg,true,C.a,C.aS],[5,5,"HIGHEST EXPENSE",top?top.amt:0,true,C.rD,C.rS]];
+  const tiles=[[1,2,"TOTAL "+T.toUpperCase(),total,true,AC,AS],[3,3,"ENTRIES",n,false,C.teal,C.soft],[4,4,"AVERAGE / ENTRY",avg,true,C.a,C.aS],[5,5,inc?"HIGHEST ENTRY":"HIGHEST EXPENSE",top?top.amt:0,true,AD,AS]];
   tiles.forEach(([c1,c2,l,v,isM,col,bg])=>{
     band(ws,4,c1,c2,l,{size:9,bold:true,color:{argb:C.mu}},bg);
     const x=band(ws,5,c1,c2,null,{size:17,bold:true,color:{argb:col}},bg);
     if(isM){money(x,v);x.alignment={horizontal:"left",vertical:"middle",indent:1}}else x.value=v;
     ws.getCell(4,c1).border={top:{style:"thick",color:{argb:col}},left:{style:"medium",color:{argb:C.w}}};ws.getCell(5,c1).border={left:{style:"medium",color:{argb:C.w}}}});
-  band(ws,6,5,5,top?top.cat:"—",{size:9,italic:true,color:{argb:C.mu}},C.rS);
+  band(ws,6,5,5,top?top.cat:"—",{size:9,italic:true,color:{argb:C.mu}},AS);
   ws.getRow(4).height=22;ws.getRow(5).height=32;ws.getRow(6).height=16;
   let r=8;
   const sec=t=>{const x=ws.getCell(r,1);x.value=t;x.font={size:12,bold:true,color:{argb:C.teal}};ws.getRow(r).height=22;r++};
@@ -726,8 +724,8 @@ async function expenseReport(list,period){
     ws.getCell(r,1).value=i+1;ws.getCell(r,2).value=name;ws.getCell(r,3).value=cn;money(ws.getCell(r,4),v);
     const sh=ws.getCell(r,5);sh.value=total?v/total:0;sh.numFmt="0.0%";
     each(ws,r,1,5,(x,j)=>{x.fill=fill(bg);x.border=box;x.font={size:11,color:{argb:C.tx}};if(j!==4)x.alignment={vertical:"middle",horizontal:j===1?"center":j>=3?"right":"left"}});
-    ws.getCell(r,2).font={size:11,bold:true,color:{argb:C.tx}};ws.getCell(r,4).font={size:11,bold:true,color:{argb:C.r}};ws.getRow(r).height=20;r++});
-  if(cats.length)ws.addConditionalFormatting({ref:`E${catFirst}:E${r-1}`,rules:[{type:"dataBar",minLength:0,maxLength:100,cfvo:[{type:"num",value:0},{type:"num",value:1}],color:{argb:"FFE8968C"},gradient:true}]});
+    ws.getCell(r,2).font={size:11,bold:true,color:{argb:C.tx}};ws.getCell(r,4).font={size:11,bold:true,color:{argb:AC}};ws.getRow(r).height=20;r++});
+  if(cats.length)ws.addConditionalFormatting({ref:`E${catFirst}:E${r-1}`,rules:[{type:"dataBar",minLength:0,maxLength:100,cfvo:[{type:"num",value:0},{type:"num",value:1}],color:{argb:inc?"FF8FD1AE":"FFE8968C"},gradient:true}]});
   ws.getCell(r,2).value="TOTAL";ws.getCell(r,3).value=n;money(ws.getCell(r,4),total);ws.getCell(r,5).value=total?1:0;ws.getCell(r,5).numFmt="0.0%";
   each(ws,r,1,5,(x,j)=>{x.fill=fill(C.soft);x.font={bold:true,size:11,color:{argb:C.teal}};x.border={top:{style:"medium",color:{argb:C.teal}},bottom:{style:"medium",color:{argb:C.teal}}};if(j>=3)x.alignment={horizontal:"right",vertical:"middle"}});
   ws.getRow(r).height=24;r+=2;
@@ -737,7 +735,7 @@ async function expenseReport(list,period){
     ws.getCell(r,1).value=i+1;const d=ws.getCell(r,2);d.value=xd(k+"T00:00");d.numFmt=DD;ws.getCell(r,3).value=dn;money(ws.getCell(r,4),v);
     const sh=ws.getCell(r,5);sh.value=total?v/total:0;sh.numFmt="0.0%";
     each(ws,r,1,5,(x,j)=>{x.fill=fill(bg);x.border=box;x.font={size:11,color:{argb:C.tx}};if(j!==4)x.alignment={vertical:"middle",horizontal:j===1?"center":j>=3?"right":"left"}});
-    ws.getCell(r,4).font={size:11,bold:true,color:{argb:C.r}};ws.getRow(r).height=19;r++});
+    ws.getCell(r,4).font={size:11,bold:true,color:{argb:AC}};ws.getRow(r).height=19;r++});
   ws.getCell(r,2).value="TOTAL";ws.getCell(r,3).value=n;money(ws.getCell(r,4),total);
   each(ws,r,1,5,(x,j)=>{x.fill=fill(C.soft);x.font={bold:true,size:11,color:{argb:C.teal}};x.border={top:{style:"medium",color:{argb:C.teal}},bottom:{style:"medium",color:{argb:C.teal}}};if(j>=3)x.alignment={horizontal:"right",vertical:"middle"}});
   ws.getRow(r).height=22;
@@ -745,7 +743,7 @@ async function expenseReport(list,period){
   /* ===== Sheet 2: Transactions ===== */
   const wt=wb.addWorksheet("Transactions",{properties:{tabColor:{argb:C.teal}},views:[{state:"frozen",ySplit:4,showGridLines:false}],pageSetup:page,headerFooter:footer});
   wt.columns=[6,24,26,40,18,32].map(w=>({width:w}));
-  band(wt,1,1,6,"Expenditure Transactions",{size:18,bold:true,color:{argb:C.w}},C.teal,34);
+  band(wt,1,1,6,`${T} Transactions`,{size:18,bold:true,color:{argb:C.w}},C.teal,34);
   band(wt,2,1,6,`${n} entries  ·  Period: ${period}  ·  Total ${inr(total)}`,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,20);
   wt.getRow(3).height=8;
   head(wt,4,["#","Date & Time","Category","Remarks","Amount","Note"],[4]);r=5;
@@ -754,7 +752,7 @@ async function expenseReport(list,period){
     wt.getCell(r,6).value=t.edited?("Edited "+fmt(t.edited)+(t.orig!==t.dt?"  ·  was "+fmt(t.orig):"")):"";
     each(wt,r,1,6,(x,j)=>{x.fill=fill(bg);x.border=box;x.font={size:11,color:{argb:C.tx}};if(j!==5)x.alignment={vertical:"middle",wrapText:j===4||j===6,horizontal:j===1?"center":"left"}});
     wt.getCell(r,2).font={size:10,color:{argb:C.mu}};wt.getCell(r,3).font={size:11,bold:true,color:{argb:C.tx}};
-    wt.getCell(r,5).font={size:11,bold:true,color:{argb:C.r}};wt.getCell(r,6).font={size:9,italic:true,color:{argb:C.mu}};
+    wt.getCell(r,5).font={size:11,bold:true,color:{argb:AC}};wt.getCell(r,6).font={size:9,italic:true,color:{argb:C.mu}};
     wt.getRow(r).height=20;r++});
   wt.autoFilter={from:{row:4,column:1},to:{row:Math.max(4,r-1),column:6}};
   wt.getCell(r,4).value="TOTAL";money(wt.getCell(r,5),total);
@@ -762,7 +760,7 @@ async function expenseReport(list,period){
   wt.getCell(r,4).alignment={horizontal:"right",vertical:"middle"};wt.getRow(r).height=26;
 
   const buf=await wb.xlsx.writeBuffer();
-  return[`Expenditure_Report_${stamp()}.xlsx`,new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})]}
+  return[`${T}_Report_${stamp()}.xlsx`,new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})]}
 async function duesReport(){
   const C={teal:"FF0F5E66",tealD:"FF0A454B",soft:"FFE6F0F0",zebra:"FFF7FAFA",bd:"FFD5DCDC",g:"FF1E8E5A",gS:"FFE3F4EB",r:"FFC0392B",rS:"FFFBE9E7",a:"FFB7791F",aS:"FFFDF3E1",mu:"FF68777A",tx:"FF1D2B2E",w:"FFFFFFFF"};
   /* Indian grouping (₹1,23,456.00) for positive amounts; a single-section format for negatives so Excel shows the minus sign */
@@ -853,7 +851,6 @@ async function duesReport(){
 
   const buf=await wb.xlsx.writeBuffer();
   return[`Customer_Dues_Report_${stamp()}.xlsx`,new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})]}
-function saveXlsx([name,wb]){const out=XLSX.write(wb,{bookType:"xlsx",type:"array"});download(name,new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}))}
 const savePdf=([name,blob])=>download(name,blob);
 
 /* ================= Actions ================= */
@@ -882,9 +879,9 @@ const A={
  export:k=>sheet("Export",`<div class="row" style="padding:4px 0">${btn("Excel (.xlsx)","exp",{arg:k+"|x",kind:"primary f1"})}${btn("PDF","exp",{arg:k+"|p",kind:"primary f1"})}</div><div class="lbl" style="margin-top:10px">Exports the list currently shown.</div>`),
  exp:a=>{const[k,f]=a.split("|"),view=k==="income"?S.iv:S.ev,list=filterTx(D[k].tx,view);if(!list.length)return toast("No transactions to export");if(!needLibs())return;
    const per=periodLabel(D[k].tx,view);
-   /* Expenditure Excel: colourful report like the Due report */
-   if(f==="x"&&k==="expense"){closeOv();toast("Preparing report…");loadExcelJS().then(()=>expenseReport(list,per)).then(x=>download(...x)).catch(e=>{console.error(e);toast("Could not create the report. Check your internet connection.")});return}
-   f==="x"?saveXlsx(bookXlsx(k,list,per)):savePdf(bookPdf(k,list,per));closeOv()},
+   /* Excel: colourful report like the Due report (Income and Expenditure) */
+   if(f==="x"){closeOv();toast("Preparing report…");loadExcelJS().then(()=>bookReport(k,list,per)).then(x=>download(...x)).catch(e=>{console.error(e);toast("Could not create the report. Check your internet connection.")});return}
+   savePdf(bookPdf(k,list,per));closeOv()},
  duemenu:()=>sheet("Menu",`<div style="display:flex;flex-direction:column;gap:8px">${btn("Delete All Transactions","delall",{kind:"danger full"})}${btn("Restore Last Deleted","restore",{kind:"full"})}${btn("Set Reminder","remind",{kind:"full"})}</div>`),
  delall:()=>{if(!D.customers.some(c=>c.txs.length))return toast("No transactions to delete");confirmDlg("Delete all due transactions of every customer?",()=>update(d=>{d.lastDeleted=d.customers.flatMap(c=>c.txs.map(t=>({cid:c.id,tx:t})));d.customers.forEach(c=>c.txs=[])}))},
  restore:()=>{if(!D.lastDeleted.length)return toast("Nothing to restore");update(d=>{d.lastDeleted.forEach(x=>{const c=d.customers.find(c=>c.id===x.cid);if(c)c.txs.push(x.tx)});d.lastDeleted=[]});closeOv();toast("Transactions restored")},
