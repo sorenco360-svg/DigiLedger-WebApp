@@ -1,0 +1,4 @@
+# Android source and local files are not part of the website
+src_mobile/
+*.zip
+.claude/
