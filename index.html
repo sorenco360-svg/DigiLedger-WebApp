@@ -357,7 +357,7 @@ async function itrReport(s){
   const head=(ws,r,labels,right,bg=C.teal)=>{labels.forEach((l,i)=>{const x=ws.getCell(r,i+1);x.value=l;x.font={bold:true,size:10,color:{argb:C.w}};x.fill=fill(bg);x.border=box;x.alignment={vertical:"middle",horizontal:right.includes(i)?"right":i===0&&l==="#"?"center":"left"}});ws.getRow(r).height=22};
   const page={orientation:"portrait",paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,margins:{left:.4,right:.4,top:.5,bottom:.6,header:.3,footer:.3}};
   const footer={oddFooter:`&L&8&K68777ADigiLedger — ITR Summary ${f.label}&R&8&K68777APage &P of &N`};
-  const sub=`${fd(f.from)} – ${fd(f.to)}${f.ongoing?" (year in progress)":""}  ·  Generated on ${fmt(now())}`;
+  const sub=`DigiLedger  ·  ${fd(f.from)} – ${fd(f.to)}${f.ongoing?" (year in progress)":""}  ·  Generated on ${fmt(now())}`;
   const wb=new ExcelJS.Workbook();wb.creator="DigiLedger";wb.created=new Date();
 
   /* Summary */
@@ -389,7 +389,7 @@ async function itrReport(s){
   const entries=(name,list,col,tab)=>{const w=wb.addWorksheet(name,{properties:{tabColor:{argb:tab}},views:[{state:"frozen",ySplit:3,showGridLines:false}],pageSetup:page,headerFooter:footer});
     w.columns=[6,24,26,36,16].map(x=>({width:x}));
     band(w,1,1,5,`${name} — ${f.label}`,{size:16,bold:true,color:{argb:C.w}},C.teal,32);
-    band(w,2,1,5,`${list.length} entries  ·  ${fd(f.from)} – ${fd(f.to)}`,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,18);
+    band(w,2,1,5,`DigiLedger  ·  ${list.length} entries  ·  ${fd(f.from)} – ${fd(f.to)}`,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,18);
     head(w,3,["#","Date & Time","Category","Remarks","Amount"],[4]);
     let rr=4;[...list].sort((x,y)=>x.dt.localeCompare(y.dt)).forEach((t,i)=>{w.getCell(rr,1).value=i+1;const d=w.getCell(rr,2);d.value=xd(t.dt);d.numFmt=DF;
       w.getCell(rr,3).value=t.cat;w.getCell(rr,4).value=t.rem||"";money(w.getCell(rr,5),t.amt);
@@ -405,7 +405,7 @@ async function itrReport(s){
 /* ---- ITR one-page PDF ---- */
 function itrPdf(s){
   const f=fyData(s),{jsPDF}=window.jspdf,doc=new jsPDF({unit:"pt",format:"a4"});
-  doc.setFillColor(15,94,102);doc.rect(0,0,595,70,"F");doc.setTextColor(255);doc.setFontSize(20);doc.text(`ITR Summary — ${f.label}`,40,40);
+  doc.setFillColor(15,94,102);doc.rect(0,0,595,70,"F");doc.setTextColor(255);doc.setFontSize(20);doc.text(`ITR Summary — ${f.label}`,40,40);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("DigiLedger",555,40,{align:"right"});doc.setFont(undefined,"normal");
   doc.setFontSize(10);doc.text(`${fd(f.from)} – ${fd(f.to)}${f.ongoing?" (year in progress)":""}   ·   Generated on ${fmt(now())}`,40,58);doc.setTextColor(30);
   const kv=[["Gross Receipts (Income)",f.gross],["Total Expenditure",f.expTot],["Net Profit",f.net],["Due Cleared during the year",f.cleared],["Credit given as Due",f.credit],[f.ongoing?"Outstanding Dues (till date)":"Outstanding Dues on "+fd(f.to),f.outstanding]];
   doc.autoTable({startY:88,head:[["Key figures","Amount"]],body:kv.map(([l,v])=>[l,rs(v)]),theme:"grid",styles:{fontSize:10,cellPadding:6},headStyles:{fillColor:[15,94,102]},columnStyles:{1:{halign:"right",fontStyle:"bold",cellWidth:140}},margin:{left:40,right:40}});
@@ -665,8 +665,13 @@ function needLibs(){if(!window.jspdf){toast("Export libraries failed to load. Ch
 function pdfReport(title,lines,head,body,foot,right,widths){
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:"pt",format:"a4"});doc.setFontSize(18);doc.text(title,40,50);doc.setFontSize(11);let y=72;lines.forEach(l=>{doc.text(l,40,y);y+=16});
   const cs={};widths.forEach((w,i)=>cs[i]={cellWidth:w,halign:right.includes(i)?"right":"left"});
-  doc.autoTable({startY:y+6,head:[head],body,foot:[foot],showFoot:"lastPage",theme:"grid",styles:{fontSize:9,cellPadding:5},headStyles:{fillColor:[15,94,102]},footStyles:{fillColor:[230,240,240],textColor:20,fontStyle:"bold"},columnStyles:cs,margin:{left:40,right:40}});
+  doc.autoTable({startY:y+6,head:[head],body,foot:[foot],showFoot:"lastPage",theme:"grid",styles:{fontSize:9,cellPadding:5},headStyles:{fillColor:[15,94,102]},footStyles:{fillColor:[230,240,240],textColor:20,fontStyle:"bold"},columnStyles:cs,margin:{left:40,right:40,top:50,bottom:40}});
+  pdfBrand(doc,title);
   return doc.output("blob")}
+/* app name on every PDF page: "DigiLedger" top-right, and a footer with the report name and page number */
+function pdfBrand(doc,title){const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);
+  doc.setFont(undefined,"bold");doc.setFontSize(12);doc.setTextColor(15,94,102);doc.text("DigiLedger",555,30,{align:"right"});doc.setFont(undefined,"normal");
+  doc.setDrawColor(213,220,220);doc.line(40,806,555,806);doc.setFontSize(8);doc.setTextColor(104,119,122);doc.text(`DigiLedger — ${title}`,40,820);doc.text(`Page ${i} of ${n}`,555,820,{align:"right"})}doc.setTextColor(0)}
 const rs=n=>"Rs. "+new Intl.NumberFormat("en-IN",{maximumFractionDigits:2,minimumFractionDigits:0}).format(n);
 function bookPdf(k,list,period){const T=KIND[k].title;return[`${T}_Report_${stamp()}.pdf`,pdfReport(`${T} Report`,["Period: "+period],["#","Date & Time","Category","Remarks","Amount"],list.map((x,i)=>[i+1,fmt(x.dt),x.cat,x.rem,rs(x.amt)]),["","","","Total",rs(sum(list.map(t=>t.amt)))],[4],[28,120,110,150,90])]}
 function ledgerPdf(c){let r=0;const rows=[...c.txs].sort((a,b)=>a.dt.localeCompare(b.dt)).map((t,i)=>{r+=t.type===GIVE?t.amt:-t.amt;return[i+1,fmt(t.dt),t.rem,t.type===GIVE?rs(t.amt):"",t.type===RECV?rs(t.amt):"",rs(r)]});
@@ -705,7 +710,7 @@ async function bookReport(k,list,period){
   const ws=wb.addWorksheet("Summary",{properties:{tabColor:{argb:AC}},views:[{showGridLines:false}],pageSetup:page,headerFooter:footer});
   ws.columns=[6,30,14,20,22,6].map(w=>({width:w}));
   band(ws,1,1,5,`${T} Report`,{size:20,bold:true,color:{argb:C.w}},C.teal,40);
-  band(ws,2,1,5,`Period: ${period}  ·  Generated on ${gen}`,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,20);
+  band(ws,2,1,5,`DigiLedger  ·  Period: ${period}  ·  Generated on ${gen}`,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,20);
   ws.getRow(3).height=10;
   const tiles=[[1,2,"TOTAL "+T.toUpperCase(),total,true,AC,AS],[3,3,"ENTRIES",n,false,C.teal,C.soft],[4,4,"AVERAGE / ENTRY",avg,true,C.a,C.aS],[5,5,inc?"HIGHEST ENTRY":"HIGHEST EXPENSE",top?top.amt:0,true,AD,AS]];
   tiles.forEach(([c1,c2,l,v,isM,col,bg])=>{
@@ -743,7 +748,7 @@ async function bookReport(k,list,period){
   const wt=wb.addWorksheet("Transactions",{properties:{tabColor:{argb:C.teal}},views:[{state:"frozen",ySplit:4,showGridLines:false}],pageSetup:page,headerFooter:footer});
   wt.columns=[6,24,26,40,18,32].map(w=>({width:w}));
   band(wt,1,1,6,`${T} Transactions`,{size:18,bold:true,color:{argb:C.w}},C.teal,34);
-  band(wt,2,1,6,`${n} entries  ·  Period: ${period}  ·  Total ${inr(total)}`,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,20);
+  band(wt,2,1,6,`DigiLedger  ·  ${n} entries  ·  Period: ${period}  ·  Total ${inr(total)}`,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,20);
   wt.getRow(3).height=8;
   head(wt,4,["#","Date & Time","Category","Remarks","Amount","Note"],[4]);r=5;
   rows.forEach((t,i)=>{const bg=i%2?C.zebra:C.w;
@@ -821,7 +826,7 @@ async function duesReport(){
   const wl=wb.addWorksheet("Customer Ledgers",{properties:{tabColor:{argb:C.r}},views:[{showGridLines:false}],pageSetup:page,headerFooter:footer});
   wl.columns=[6,24,40,18,18,18,30].map(w=>({width:w}));
   band(wl,1,1,7,"Customer Ledgers",{size:20,bold:true,color:{argb:C.w}},C.teal,40);
-  band(wl,2,1,7,"Every due transaction, oldest first, with running balance  ·  Generated on "+gen,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,20);
+  band(wl,2,1,7,"DigiLedger  ·  Every due transaction, oldest first, with running balance  ·  Generated on "+gen,{size:10,italic:true,color:{argb:"FFCFE6E8"}},C.tealD,20);
   r=4;
   rows.forEach(({c,g,p,b})=>{
     band(wl,r,1,5,c.name+"     ·     📱 "+c.mob+(c.addr?"     ·     "+c.addr:""),{size:12,bold:true,color:{argb:C.teal}},C.soft,26);
