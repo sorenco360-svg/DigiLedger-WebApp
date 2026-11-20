@@ -100,6 +100,7 @@ select:focus{border-color:var(--p)}
 .mt td{text-align:right;padding:7px 4px;border-bottom:1px solid var(--bd)}
 .mt th:first-child,.mt td:first-child{text-align:left}
 .mt tfoot td{font-weight:700;color:var(--p);border-bottom:0;border-top:2px solid var(--p)}
+.btn.sm{min-height:40px;padding:6px 12px;font-size:15px;flex:none}
 .edited{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--p);margin-top:3px}
 .edited svg{width:12px;height:12px;flex:none}
 .copyright{position:absolute;left:0;right:0;bottom:0;z-index:4;text-align:center;font-size:12px;color:var(--mu);padding:10px 16px;background:var(--bg)}
@@ -177,6 +178,7 @@ const stamp=()=>{const d=new Date();return `${d.getFullYear()}${p2(d.getMonth()+
 const addDays=(d,n)=>{const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()+n);return x};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const inRange=(dt,a,b)=>{const k=dt.slice(0,10);return k>=dayKey(a)&&k<dayKey(b)};
+const MAX_RANGE_DAYS=31; /* longest Custom Date period in Income / Expenditure */
 const pDay=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
 function range(view){const n=today0();
   if(view&&view.startsWith("custom:")){const[a,b]=view.slice(7).split(":");return[pDay(a),addDays(pDay(b),1)]}
@@ -342,11 +344,11 @@ function fyData(s){
   return{s,label:fyLabel(s),from:a,to:addDays(b,-1),ongoing,inc,exp,gross,expTot,net:gross-expTot,cleared,credit,outstanding,months,topInc:top(inc),topExp:top(exp)}}
 function itrCard(){
   const list=fyList();if(S.fy==null||!list.includes(S.fy))S.fy=list[0];
-  return `<div class="card" style="margin-top:12px">
-  <div class="sec" style="margin-bottom:2px">ITR Summary</div><div class="lbl">Financial-year totals for filing your return</div>
-  <div class="row" style="margin-top:12px"><span class="lbl">Financial Year</span><select id="fysel" class="grow" aria-label="Financial year">${list.map(s=>`<option value="${s}"${s===S.fy?" selected":""}>${fyLabel(s)}</option>`).join("")}</select></div>
-  <div class="lbl" style="margin-top:10px;font-size:13px">This is a summary of your entries, not tax advice.</div>
-  <div class="row" style="margin-top:14px">${btn("Excel for CA","itrxl",{kind:"primary f1",icon:"dl"})}${btn("PDF","itrpdf",{kind:"f1",icon:"dl"})}</div>
+  return `<div class="card" style="margin-top:12px;padding:12px 12px 12px 14px">
+  <div class="row" style="gap:12px"><div class="circle" style="width:38px;height:38px;background:var(--soft);color:var(--p)">${svg("due")}</div>
+   <div class="grow"><div class="sb">ITR Summary</div><div class="lbl" style="font-size:12px">Summary of your entries, not tax advice.</div></div></div>
+  <div class="row" style="margin-top:10px;gap:6px"><select id="fysel" class="grow" style="min-height:40px;font-size:15px;min-width:0" aria-label="Financial year">${list.map(s=>`<option value="${s}"${s===S.fy?" selected":""}>${fyLabel(s)}</option>`).join("")}</select>
+   ${btn("Excel","itrxl",{kind:"primary",icon:"dl"}).replace('class="btn primary ','class="btn primary sm ')}${btn("PDF","itrpdf",{icon:"dl"}).replace('class="btn  ','class="btn sm ')}</div>
   </div>`}
 
 /* ---- ITR Excel workbook for the CA ---- */
@@ -538,8 +540,9 @@ function gdSetupInfo(){sheet("Set up Google Drive backup",`<div class="lbl" styl
   <li>Put the Client ID in <b>GOOGLE_CLIENT_ID</b> in index.html.</li></ol>`)}
 function backupCard(){
   const g=D.gd;
-  if(!g?.on)return `<div class="card"><div class="row top"><div class="circle" style="width:44px;height:44px;background:var(--soft);color:var(--p)">${svg("cloud")}</div><div class="grow" style="padding-left:12px"><div class="sb">Auto Backup</div><div class="lbl">Keep your data safe in your own Google Drive. It’s backed up automatically after every change.</div></div></div>
-    <button class="btn primary full" style="margin-top:12px" data-act="gdon">${svg("cloud")}Auto Backup</button></div>`;
+  if(!g?.on)return `<div class="card" style="padding:12px 12px 12px 14px"><div class="row" style="gap:12px"><div class="circle" style="width:38px;height:38px;background:var(--soft);color:var(--p)">${svg("cloud")}</div>
+    <div class="grow"><div class="sb">Auto Backup</div><div class="lbl" style="font-size:13px">Back up to Google Drive</div></div>
+    <button class="btn primary" style="min-height:40px;padding:6px 16px;flex:none" data-act="gdon">Turn On</button></div></div>`;
   const status=GD.busy?`<span style="color:var(--p)">Backing up…</span>`:GD.err?`<span class="r">${esc(GD.err)}</span>`:g.pending&&!gdTokenOk()&&g.last?`<span style="color:var(--a,#B7791F)">Backup pending — tap Back up now</span>`:g.last?"Last backup: "+fmt(g.last):"Not backed up yet";
   return `<div class="card"><div class="row top"><div class="circle" style="width:44px;height:44px;background:var(--p);color:var(--pt)">${svg("cloud")}</div><div class="grow" style="padding-left:12px"><div class="row"><span class="sb grow">Auto Backup</span><span style="font-size:12px;font-weight:700;color:var(--g);background:var(--soft);padding:3px 10px;border-radius:10px">ON</span></div>
     <div class="lbl" style="word-break:break-all">Google Drive${g.email?" · "+esc(g.email):""}</div><div style="font-size:13px;margin-top:4px">${status}</div></div></div>
@@ -876,12 +879,19 @@ const A={
  delcat:a=>{const i=a.indexOf("|"),k=a.slice(0,i),n=a.slice(i+1);confirmDlg(`Delete the category “${n}”? Existing transactions are not affected.`,()=>{update(d=>d[k].cats=d[k].cats.filter(c=>c!==n));catsSheet(k)})},
  sort:k=>{const v=k==="income"?S.iv:S.ev;sheet("Sort",`<div class="row" style="padding:4px 0">${["weekly","monthly"].map(x=>btn(x[0].toUpperCase()+x.slice(1),"setview",{arg:k+"|"+x,kind:"f1 "+(v===x?"sel":"")})).join("")}</div>${btn("Custom Date","customdate",{arg:k,icon:"cal",kind:"full "+(v&&v.startsWith("custom:")?"sel":"")})}`)},
  customdate:k=>{const v=k==="income"?S.iv:S.ev,cur=v&&v.startsWith("custom:")?v.slice(7).split(":"):null,td=dayKey(new Date());
-   sheet("Custom Date",`<div class="lbl">Show ${KIND[k].lc} transactions between two dates (both days included).</div>
+   sheet("Custom Date",`<div class="lbl">Show ${KIND[k].lc} transactions between two dates, up to 31 days (both days included).</div>
     <div class="fl">From Date</div><input type="date" id="cd_from" value="${cur?cur[0]:td.slice(0,8)+"01"}" max="${td}">
     <div class="fl">To Date</div><input type="date" id="cd_to" value="${cur?cur[1]:td}">
     <div class="err" id="err"></div>`,`<button class="btn primary f1" id="cd_ok">Apply</button>`,
-    ()=>{document.getElementById("cd_ok").onclick=()=>{const a=val("cd_from"),b=val("cd_to");
+    ()=>{const from=document.getElementById("cd_from"),to=document.getElementById("cd_to");
+      /* the To Date picker only offers From Date … From Date + 30 days (31 days in all) */
+      const limit=()=>{if(!from.value)return;const mx=dayKey(addDays(pDay(from.value),MAX_RANGE_DAYS-1));to.min=from.value;to.max=mx;
+        if(to.value&&(to.value<from.value||to.value>mx))to.value=mx;setErr("")};
+      from.addEventListener("change",limit);from.addEventListener("input",limit);limit();
+      document.getElementById("cd_ok").onclick=()=>{const a=val("cd_from"),b=val("cd_to");
       if(!a||!b)return setErr("Choose both From and To dates.");if(a>b)return setErr("From Date must be on or before To Date.");
+      const days=Math.round((pDay(b)-pDay(a))/864e5)+1;
+      if(days>MAX_RANGE_DAYS)return setErr(`You can choose up to ${MAX_RANGE_DAYS} days. This period is ${days} days.`);
       A.setview(k+"|custom:"+a+":"+b)}})},
  setview:a=>{const[k,v]=a.split("|");S.lim[k]=PAGE;if(k==="income")S.iv=v;else S.ev=v;closeOv();render()},
  clearview:k=>{S.lim[k]=PAGE;if(k==="income")S.iv=null;else S.ev=null;render()},
