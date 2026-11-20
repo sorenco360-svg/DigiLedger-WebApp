@@ -337,11 +337,10 @@ function fyData(s){
   return{s,label:fyLabel(s),from:a,to:addDays(b,-1),ongoing,inc,exp,gross,expTot,net:gross-expTot,cleared,credit,outstanding,months,topInc:top(inc),topExp:top(exp)}}
 function itrCard(){
   const list=fyList();if(S.fy==null||!list.includes(S.fy))S.fy=list[0];
-  const f=fyData(S.fy),pctNet=f.gross?f.net/f.gross*100:0;
   return `<div class="card" style="margin-top:12px">
   <div class="sec" style="margin-bottom:2px">ITR Summary</div><div class="lbl">Financial-year totals for filing your return</div>
   <div class="row" style="margin-top:12px"><span class="lbl">Financial Year</span><select id="fysel" class="grow" aria-label="Financial year">${list.map(s=>`<option value="${s}"${s===S.fy?" selected":""}>${fyLabel(s)}</option>`).join("")}</select></div>
-  ${f.gross?`<div class="pill" style="margin:12px 0 0;padding:10px 12px;display:block;font-size:13px"><b>Net profit is ${pctNet.toFixed(1)}% of gross receipts.</b><div class="mu" style="margin-top:4px">Confirm the correct ITR form and scheme with your CA. This is a summary of your entries, not tax advice.</div></div>`:""}
+  <div class="lbl" style="margin-top:10px;font-size:13px">This is a summary of your entries, not tax advice.</div>
   <div class="row" style="margin-top:14px">${btn("Excel for CA","itrxl",{kind:"primary f1",icon:"dl"})}${btn("PDF","itrpdf",{kind:"f1",icon:"dl"})}</div>
   </div>`}
 
