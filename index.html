@@ -466,25 +466,25 @@ const gdPayload=()=>{const{gd,...data}=D;return JSON.stringify({app:"DigiLedger"
 function gdRefresh(){if(S.tab==="settings"){S._keepScroll=true;render()}}
 const GD_FOLDER="DigiLedger",FOLDER_MIME="application/vnd.google-apps.folder";
 const gdQuery=async q=>(await (await gdApi(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&spaces=drive&orderBy=modifiedTime desc&fields=files(id,name,modifiedTime,parents)`)).json()).files||[];
-/* RULE: every sign-in (turning Auto Backup on) gets its own new dated folder, e.g. "DigiLedger 2026-11-21",
-   with " (2)", " (3)"… added when that name already exists. Earlier DigiLedger folders are never touched.
-   The folder is kept in D.gd.folderId for the rest of that sign-in; if it is deleted, a new dated folder is made. */
+/* RULE: one "DigiLedger" folder in Google Drive, reused every time (created only if it doesn't exist).
+   The backup file DigiLedger_Backup.json inside it is overwritten on every backup — no new folders or files. */
 async function gdFolder(){
   /* folder/file IDs saved under another Client ID can't be opened with this one: start fresh */
   if(D.gd.cid!==GOOGLE_CLIENT_ID){D.gd.cid=GOOGLE_CLIENT_ID;D.gd.folderId=null;D.gd.fileId=null;GD.folderOk=null;GD.fileOk=null;save()}
   if(D.gd.folderId&&GD.folderOk===D.gd.folderId)return D.gd.folderId;
-  if(D.gd.folderId){const r=await gdApi(`https://www.googleapis.com/drive/v3/files/${D.gd.folderId}?fields=id,trashed`);
+  if(D.gd.folderId&&D.gd.folderName===GD_FOLDER){const r=await gdApi(`https://www.googleapis.com/drive/v3/files/${D.gd.folderId}?fields=id,trashed`);
     if(r.status!==404&&!(await r.json()).trashed){GD.folderOk=D.gd.folderId;return D.gd.folderId}}
-  const base=`${GD_FOLDER} ${dayKey(new Date())}`;
-  const taken=new Set((await gdQuery(`name contains '${base}' and mimeType='${FOLDER_MIME}' and trashed=false`)).map(x=>x.name));
-  let name=base;for(let i=2;taken.has(name);i++)name=`${base} (${i})`;
-  const r=await gdApi("https://www.googleapis.com/drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,mimeType:FOLDER_MIME,description:"DigiLedger automatic backup"})});
-  const id=(await r.json()).id;
-  D.gd.folderId=id;D.gd.folderName=name;D.gd.fileId=null;GD.folderOk=id;GD.fileOk=null;save();return id}
-/* latest DigiLedger backup in any of the app's folders (used to offer Restore) */
-async function gdFind(){return(await gdQuery(`name='${GD_FILE}' and trashed=false`))[0]||null}
+  let id=(await gdQuery(`name='${GD_FOLDER}' and mimeType='${FOLDER_MIME}' and trashed=false`))[0]?.id;
+  if(!id){const r=await gdApi("https://www.googleapis.com/drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:GD_FOLDER,mimeType:FOLDER_MIME,description:"DigiLedger automatic backup"})});id=(await r.json()).id}
+  if(D.gd.folderId!==id){D.gd.fileId=null;GD.fileOk=null}
+  D.gd.folderId=id;D.gd.folderName=GD_FOLDER;GD.folderOk=id;save();return id}
+/* the backup file in the DigiLedger folder (or, if there is none yet, the latest one anywhere — used to offer Restore) */
+async function gdFind(){const f=await gdFolder();
+  return(await gdQuery(`name='${GD_FILE}' and '${f}' in parents and trashed=false`))[0]||(await gdQuery(`name='${GD_FILE}' and trashed=false`))[0]||null}
 async function gdUpload(){
   const body=gdPayload(),folder=await gdFolder();let id=D.gd.fileId;
+  /* overwrite the existing DigiLedger_Backup.json in the folder instead of making another file */
+  if(!id){id=(await gdQuery(`name='${GD_FILE}' and '${folder}' in parents and trashed=false`))[0]?.id||null;if(id)GD.fileOk=id}
   /* once per session: make sure the saved file still exists, isn't in the bin, and sits in the DigiLedger folder */
   if(id&&GD.fileOk!==id){const r=await gdApi(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,trashed,parents`);
     if(r.status===404)id=null;else{const m=await r.json();if(m.trashed)id=null;
