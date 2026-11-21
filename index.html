@@ -127,7 +127,7 @@ const DEFAULT_EXPENSE_CATS=["Electricity Bill","Paper & Toner","Shop Rent","Tea 
 const GIVE="give",RECV="recv",PREFIX="test_";
 const KIND={income:{title:"Income",lc:"income"},expense:{title:"Expenditure",lc:"expenditure"}};
 const KEY="csc_exp_tracker_data";
-const blank=()=>({income:{tx:[],cats:[...DEFAULT_INCOME_CATS]},expense:{tx:[],cats:[...DEFAULT_EXPENSE_CATS]},customers:[],lastDeleted:[],hideDue:false,reminderAt:null,lastUpdated:null,theme:"system",account:null});
+const blank=()=>({income:{tx:[],cats:[...DEFAULT_INCOME_CATS]},expense:{tx:[],cats:[...DEFAULT_EXPENSE_CATS]},customers:[],lastDeleted:[],hideDue:false,reminderAt:null,lastUpdated:null,theme:"system"});
 let D=blank();
 /* Data lives in IndexedDB (no 5 MB limit). Older data in localStorage is moved over on first start.
    If IndexedDB is unavailable, localStorage is used; if neither works, the app runs without saving. */
@@ -1014,7 +1014,10 @@ const _render=render;render=function(){_render();if(S.tab==="due"&&S.open&&!hist
 /* reminder check every 15s */
 function checkReminder(){const at=D.reminderAt;if(!at)return;if(!(pd(at)>new Date())){update(d=>d.reminderAt=null);toast("Reminder: collect pending dues");try{if("Notification" in window&&Notification.permission==="granted")new Notification("DigiLedger",{body:"Collect pending dues"})}catch(e){}}}
 if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).catch(()=>{});
-load().then(()=>{render();checkReminder();setInterval(checkReminder,15000)});
+load().then(()=>{
+  /* clean up data left by removed features: the old manual Gmail "Login" card stored an email in D.account */
+  if("account" in D){delete D.account;save()}
+  render();checkReminder();setInterval(checkReminder,15000)});
 /* load Google's sign-in script early so tapping Auto Backup opens Google's window straight away */
 if(GOOGLE_CLIENT_ID)loadGIS().catch(()=>{});
 </script>
