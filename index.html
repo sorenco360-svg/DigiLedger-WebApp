@@ -573,7 +573,7 @@ function settings(){
   <div class="copyright">Copyright © 2026 DigiLedger</div>
   ${backupCard()}
   ${itrCard()}
-  <div class="card" style="margin-top:12px"><div class="sec" style="margin-bottom:4px">Test Data</div><div class="lbl">Adds 10 Income, 10 Expenditure and 30 Due transactions (14 customers) for trying the app. Removing deletes only these test entries.</div><div class="row" style="margin-top:10px">${btn(has?"Reload Test Data":"Load Test Data","loadsample",{kind:"primary f1"})}${btn("Remove Test Data","rmsample",{kind:"danger f1"})}</div></div>
+  <div class="card" style="margin-top:12px"><div class="sec" style="margin-bottom:4px">Test Data</div><div class="lbl">Adds 100 Income, 100 Expenditure and 100 Due transactions (25 customers) for trying the app. Removing deletes only these test entries.</div><div class="row" style="margin-top:10px">${btn(has?"Reload Test Data":"Load Test Data","loadsample",{kind:"primary f1"})}${btn("Remove Test Data","rmsample",{kind:"danger f1"})}</div></div>
   </div>`}
 
 /* ================= Sample data ================= */
@@ -598,6 +598,40 @@ function sampleCust(){const T=(id,ty,a,d,m,r="")=>({id:PREFIX+id,type:ty,amt:a,d
  {id:PREFIX+"c12",name:"Lakshmi Nair",addr:"Lake View",mob:"9888899900",created:ago(16,0),txs:[T("d24",GIVE,300,10,60,"Print-outs"),T("d25",RECV,300,6,60,"Cleared")]},
  {id:PREFIX+"c13",name:"Imran Khan",addr:"Nehru Chowk",mob:"9899900011",created:ago(4,0),txs:[T("d26",GIVE,820,0,60,"PAN correction"),T("d27",RECV,320,0,15)]},
  {id:PREFIX+"c14",name:"Pooja Gupta",addr:"Civil Lines",mob:"9700011122",created:ago(21,0),txs:[T("d28",GIVE,1600,16,60,"Aadhar + PAN link"),T("d29",RECV,600,9,60),T("d30",GIVE,250,1,60,"Lamination")]}]}
+/* Extra generated test entries so each tab has 100: 90 more Income, 90 more Expenditure, 70 more Due entries
+   (the 14 hand-written customers plus 11 new ones = 25 customers). Spread over the last 60 days.
+   Uses a fixed seed, so "Reload Test Data" always gives the same entries. All ids start with test_. */
+function sampleMore(){
+  let seed=20261121;const rnd=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^(seed>>>15),1|seed);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296};
+  const pick=a=>a[Math.floor(rnd()*a.length)],between=(a,b,step=10)=>Math.round((a+rnd()*(b-a))/step)*step||step;
+  const when=()=>[Math.floor(rnd()*60),Math.floor(rnd()*600)];
+  /* Income: category, amount range, remarks */
+  const IN=[["Xerox",20,300,["","Xerox copies","Documents xerox","50 pages"]],["Print",20,400,["","Colour print","B/W print-outs","Resume print"]],
+    ["PAN Services",107,1200,["New PAN card","PAN correction","PAN-Aadhaar link"]],["Aadhar Services",50,800,["Address update","Mobile number update","Aadhaar print"]],
+    ["Passport Photo",50,200,["","8 photos","Photo + lamination"]],["Lamination",20,150,["","Card lamination","A4 lamination"]],
+    ["Mobile & DTH Recharge",99,999,["Jio recharge","Airtel recharge","DTH recharge"]],["Voter ID",50,300,["New voter ID","Voter ID correction"]],
+    ["Job Apply",100,600,["SSC form","Railway form","Police form","Bank exam form"]],["Govt Schemes Apply",100,800,["PM Kisan","Ayushman card","e-Shram","Pension form"]],
+    ["LL, DL Services",300,2000,["Learner licence","DL renewal"]],["ServicePlus",50,500,["Caste certificate","Income certificate","Residence certificate"]],
+    ["Cash Withdrawal & Deposit",20,200,["AEPS commission","Cash deposit"]]];
+  const income=Array.from({length:90},(_,i)=>{const[c,a,b,rems]=pick(IN);const[d,m]=when();return X("gi"+(i+1),between(a,b),c,d,m,pick(rems))});
+  /* Expenditure: frequent small costs plus monthly bills in each of the last two months */
+  const expense=[];let ei=0;const E=(amt,cat,d,m,rem="")=>expense.push(X("ge"+(++ei),amt,cat,d,m,rem));
+  [5,35].forEach(off=>{E(5000,"Shop Rent",off+3,60,"Monthly rent");E(6000,"Staff Salary",off+2,90,"Helper salary");E(between(1100,1900),"Electricity Bill",off+8,45,"Electricity bill");E(599,"Wifi Bill",off+10,30,"Monthly wifi")});
+  while(expense.length<90){const[d,m]=when();if(rnd()<0.65)E(between(20,150,5),"Tea & Snacks",d,m,pick(["","Tea","Tea & biscuits","Snacks for staff"]));else E(between(200,1500),"Paper & Toner",d,m,pick(["","1 ream paper","2 reams paper","Toner refill","Ink bottles"]))}
+  /* Due: 14 existing customers + 11 new */
+  const custs=sampleCust();
+  [["Arjun Mehta","Bus Stand Road","9700112233"],["Neha Reddy","Ward No. 4","9700223344"],["Vikram Chauhan","","9700334455"],["Anita Das","School Lane","9700445566"],
+   ["Sanjay Mishra","Hanuman Chowk","9700556677"],["Rekha Pillai","Church Road","9700667788"],["Gopal Prasad","Mandi Road","9700778899"],["Farhan Ali","New Colony","9700889900"],
+   ["Sunita Rao","Post Office Road","9700990011"],["Harish Bhat","","9701001122"],["Kiran Thakur","Block B","9701112233"]]
+   .forEach(([name,addr,mob],i)=>custs.push({id:PREFIX+"gc"+(i+1),name,addr,mob,created:ago(58,0),txs:[]}));
+  const DR=["Passport form","Aadhaar update","PAN card","Job form fee","Print-outs","Lamination","Photos","Recharge","Certificate","Scheme form"];
+  let di=0;
+  for(let k=0;k<70;k++){const c=custs[k%custs.length];const bal=c.txs.reduce((s,t)=>s+(t.type===GIVE?t.amt:-t.amt),0);
+    const[d,m]=when();
+    /* mostly new dues; sometimes a part or full payment of what is owed */
+    if(bal>0&&rnd()<0.4)c.txs.push({id:PREFIX+"gd"+(++di),type:RECV,amt:rnd()<0.3?bal:Math.max(50,Math.min(bal,between(50,bal))),dt:ago(d,m),rem:pick(["","Cash","UPI","Part payment"])});
+    else c.txs.push({id:PREFIX+"gd"+(++di),type:GIVE,amt:between(100,2500),dt:ago(d,m),rem:pick(DR)})}
+  return{income,expense,customers:custs}}
 function removeSample(){D.income.tx=D.income.tx.filter(t=>!t.id.startsWith(PREFIX));D.expense.tx=D.expense.tx.filter(t=>!t.id.startsWith(PREFIX));D.customers=D.customers.filter(c=>!c.id.startsWith(PREFIX));D.lastDeleted=D.lastDeleted.filter(x=>!x.cid.startsWith(PREFIX))}
 
 /* ================= Forms ================= */
@@ -942,7 +976,7 @@ const A={
  itrpdf:()=>{if(!window.jspdf)return toast("Export libraries failed to load. Check your connection.");savePdf(itrPdf(S.fy))},
  /* switching to the same mode as the device goes back to following the device automatically */
  darkmode:()=>{S._keepScroll=true;const want=!isDark();update(d=>d.theme=want===mq.matches?"system":want?"dark":"light")},
- loadsample:()=>{update(d=>{removeSample();d.income.tx.push(...sampleIncome());d.expense.tx.push(...sampleExpense());d.customers.push(...sampleCust())},true);toast("Test data loaded")},
+ loadsample:()=>{update(d=>{removeSample();const x=sampleMore();d.income.tx.push(...sampleIncome(),...x.income);d.expense.tx.push(...sampleExpense(),...x.expense);d.customers.push(...x.customers)},true);toast("Test data loaded")},
  rmsample:()=>{if(!hasSample())return toast("No test data to remove");confirmDlg("Remove all test entries? Your own entries are not affected.",()=>{update(d=>removeSample());toast("Test data removed")},"Remove")},
  gdon:()=>gdConnect(),gdnow:()=>gdBackup(true),gdrestore:()=>gdRestore(),gdsignout:()=>gdSignOut()
 };

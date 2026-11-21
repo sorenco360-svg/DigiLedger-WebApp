@@ -2,3 +2,5 @@
 src_mobile/
 *.zip
 .claude/
+# documents (rebuild guide etc.) stay local
+*.docx
