@@ -4,3 +4,5 @@ src_mobile/
 .claude/
 # documents (rebuild guide etc.) stay local
 *.docx
+# marketing screenshots stay local
+screenshots/
