@@ -100,6 +100,8 @@ select:focus{border-color:var(--p)}
 .mt td{text-align:right;padding:7px 4px;border-bottom:1px solid var(--bd)}
 .mt th:first-child,.mt td:first-child{text-align:left}
 .mt tfoot td{font-weight:700;color:var(--p);border-bottom:0;border-top:2px solid var(--p)}
+.ib.signout{margin:-8px -8px -8px 2px}
+.ib.signout svg{width:20px;height:20px}
 .btn.sm{min-height:40px;padding:6px 12px;font-size:15px;flex:none}
 .edited{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--p);margin-top:3px}
 .edited svg{width:12px;height:12px;flex:none}
@@ -221,7 +223,8 @@ const ICON={
  user:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18c1.5-2.5 3.2-3.5 5.5-3.5s4 1 5.5 3.5"/>',
  chev:'<path d="M9 6l6 6-6 6"/>',
  cloud:'<path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.8 8.6 4.7 4.7 0 0 1 17.5 18z"/>',
- moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>'};
+ moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+ logout:'<path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/>'};
 const svg=(n,cls="")=>`<svg viewBox="0 0 24 24" class="${cls}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
 const ib=(act,icon,color,label,arg="",cls="")=>`<button class="ib ${cls}" style="color:var(--${color})" data-act="${act}" data-arg="${esc(arg)}" aria-label="${label}">${svg(icon)}</button>`;
 const btn=(txt,act,{kind="",arg="",icon="",cls=""}={})=>`<button class="btn ${kind} ${cls}" data-act="${act}" data-arg="${esc(arg)}">${icon?svg(icon):""}${txt}</button>`;
@@ -449,14 +452,23 @@ function gdToken(prompt){return new Promise((res,rej)=>{
 async function gdApi(url,opt={}){
   const r=await fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+GD.token}});
   if(r.status===401){GD.token=null;throw new Error("Google sign-in expired. Tap Back up now.")}
-  if(!r.ok&&r.status!==404)throw new Error("Google Drive error ("+r.status+"). Try again later.");
-  return r}
+  if(r.ok||r.status===404)return r;
+  /* read Google's reason so the message says what is actually wrong */
+  let reason="",msg="";try{const j=await r.clone().json();reason=j.error?.errors?.[0]?.reason||j.error?.details?.[0]?.reason||j.error?.status||"";msg=j.error?.message||""}catch(e){}
+  /* a folder or file made under a different Client ID can't be opened: treat it as missing so a fresh one is created */
+  if(r.status===403&&/appNotAuthorizedToFile|insufficientFilePermissions|notFound/i.test(reason))return new Response("{}",{status:404});
+  if(/accessNotConfigured|SERVICE_DISABLED/i.test(reason)||/has not been used|is disabled/i.test(msg))throw new Error("Google Drive API is turned off for this app. Enable it in Google Cloud Console.");
+  if(/insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(reason)){GD.token=null;throw new Error("Allow DigiLedger to save files in Google Drive, then tap Back up now.")}
+  if(/rateLimit|userRateLimit|quota/i.test(reason))throw new Error("Google Drive is busy. Try again in a minute.");
+  throw new Error("Google Drive error ("+r.status+(reason?" · "+reason:"")+"). Try again later.")}
 const gdPayload=()=>{const{gd,...data}=D;return JSON.stringify({app:"DigiLedger",kind:"backup",version:1,exportedAt:now(),data})};
 function gdRefresh(){if(S.tab==="settings"){S._keepScroll=true;render()}}
 const GD_FOLDER="DigiLedger",FOLDER_MIME="application/vnd.google-apps.folder";
 const gdQuery=async q=>(await (await gdApi(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&spaces=drive&orderBy=modifiedTime desc&fields=files(id,modifiedTime,parents)`)).json()).files||[];
 /* the "DigiLedger" folder in the user's Drive (created by the app if missing); cached in D.gd.folderId */
 async function gdFolder(){
+  /* folder/file IDs saved under another Client ID can't be opened with this one: start fresh */
+  if(D.gd.cid!==GOOGLE_CLIENT_ID){D.gd.cid=GOOGLE_CLIENT_ID;D.gd.folderId=null;D.gd.fileId=null;GD.folderOk=null;GD.fileOk=null;save()}
   if(D.gd.folderId&&GD.folderOk===D.gd.folderId)return D.gd.folderId;
   if(D.gd.folderId){const r=await gdApi(`https://www.googleapis.com/drive/v3/files/${D.gd.folderId}?fields=id,trashed`);
     if(r.status!==404&&!(await r.json()).trashed){GD.folderOk=D.gd.folderId;return D.gd.folderId}}
@@ -531,6 +543,10 @@ async function gdRestore(){
     const n=data.income.tx.length+data.expense.tx.length+data.customers.reduce((x,c)=>x+c.txs.length,0);
     confirmDlg(`Restore the Google Drive backup${at?" from "+fmt(at):""}? It has ${n} transactions and ${data.customers.length} customers. All data on this device will be replaced.`,()=>{gdApply(data);toast("Backup restored")},"Restore")}
   catch(e){GD.err=e.message}finally{GD.busy=false;gdRefresh()}}
+/* Sign out: stops Auto Backup on this device and removes DigiLedger's Google access. The backup file stays in Drive. */
+function gdSignOut(){confirmDlg("Sign out of Google Drive? Auto Backup will stop on this device. Your backup stays in Google Drive and you can turn it on again anytime.",()=>{
+  try{if(GD.token&&window.google?.accounts?.oauth2)google.accounts.oauth2.revoke(GD.token,()=>{})}catch(e){}
+  clearTimeout(GD.timer);GD.token=null;GD.exp=0;GD.err="";GD.busy=false;GD.folderOk=null;GD.fileOk=null;D.gd=null;save();gdRefresh();toast("Signed out. Auto Backup is off.")},"Sign Out")}
 function gdSetupInfo(){sheet("Set up Google Drive backup",`<div class="lbl" style="line-height:1.5">Auto Backup needs a one-time setup by the app owner before anyone can sign in:</div>
   <ol style="padding-left:20px;line-height:1.6;font-size:14px;margin:10px 0">
   <li>Open <b>console.cloud.google.com</b> and create a project.</li>
@@ -544,7 +560,7 @@ function backupCard(){
     <div class="grow"><div class="sb">Auto Backup</div><div class="lbl" style="font-size:13px">Back up to Google Drive</div></div>
     <button class="btn primary" style="min-height:40px;padding:6px 16px;flex:none" data-act="gdon">Turn On</button></div></div>`;
   const status=GD.busy?`<span style="color:var(--p)">Backing up…</span>`:GD.err?`<span class="r">${esc(GD.err)}</span>`:g.pending&&!gdTokenOk()&&g.last?`<span style="color:var(--a,#B7791F)">Backup pending — tap Back up now</span>`:g.last?"Last backup: "+fmt(g.last):"Not backed up yet";
-  return `<div class="card"><div class="row top"><div class="circle" style="width:44px;height:44px;background:var(--p);color:var(--pt)">${svg("cloud")}</div><div class="grow" style="padding-left:12px"><div class="row"><span class="sb grow">Auto Backup</span><span style="font-size:12px;font-weight:700;color:var(--g);background:var(--soft);padding:3px 10px;border-radius:10px">ON</span></div>
+  return `<div class="card"><div class="row top"><div class="circle" style="width:44px;height:44px;background:var(--p);color:var(--pt)">${svg("cloud")}</div><div class="grow" style="padding-left:12px"><div class="row"><span class="sb grow">Auto Backup</span><span style="font-size:12px;font-weight:700;color:var(--g);background:var(--soft);padding:3px 10px;border-radius:10px">ON</span>${ib("gdsignout","logout","r","Sign out and stop Auto Backup","","s40 signout")}</div>
     <div class="lbl" style="word-break:break-all">Google Drive${g.email?" · "+esc(g.email):""}</div><div style="font-size:13px;margin-top:4px">${status}</div></div></div>
     <div class="row" style="margin-top:12px">${btn("Back up now","gdnow",{kind:"primary f1"})}${btn("Restore","gdrestore",{kind:"f1"})}</div></div>`}
 
@@ -925,7 +941,7 @@ const A={
  darkmode:()=>{S._keepScroll=true;const want=!isDark();update(d=>d.theme=want===mq.matches?"system":want?"dark":"light")},
  loadsample:()=>{update(d=>{removeSample();d.income.tx.push(...sampleIncome());d.expense.tx.push(...sampleExpense());d.customers.push(...sampleCust())},true);toast("Test data loaded")},
  rmsample:()=>{if(!hasSample())return toast("No test data to remove");confirmDlg("Remove all test entries? Your own entries are not affected.",()=>{update(d=>removeSample());toast("Test data removed")},"Remove")},
- gdon:()=>gdConnect(),gdnow:()=>gdBackup(true),gdrestore:()=>gdRestore()
+ gdon:()=>gdConnect(),gdnow:()=>gdBackup(true),gdrestore:()=>gdRestore(),gdsignout:()=>gdSignOut()
 };
 document.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(!el)return;const f=A[el.dataset.act];if(f){e.preventDefault();f(el.dataset.arg||"")}});
 document.addEventListener("change",e=>{if(e.target.id==="fysel"){S.fy=+e.target.value;S._keepScroll=true;render()}});
