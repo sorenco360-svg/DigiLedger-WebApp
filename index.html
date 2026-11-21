@@ -102,6 +102,7 @@ select:focus{border-color:var(--p)}
 .mt tfoot td{font-weight:700;color:var(--p);border-bottom:0;border-top:2px solid var(--p)}
 .ib.signout{margin:-8px -8px -8px 2px}
 .ib.signout svg{width:20px;height:20px}
+.io .btn{min-height:40px;font-size:15px;padding:6px 12px}
 .btn.sm{min-height:40px;padding:6px 12px;font-size:15px;flex:none}
 .edited{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--p);margin-top:3px}
 .edited svg{width:12px;height:12px;flex:none}
@@ -567,11 +568,33 @@ function backupCard(){
     <div class="lbl" style="word-break:break-all">Google Drive${g.email?" · "+esc(g.email):""}</div>${g.folderName?`<div class="lbl" style="font-size:12px">Folder: ${esc(g.folderName)}</div>`:""}<div style="font-size:13px;margin-top:4px">${status}</div></div></div>
     <div class="row" style="margin-top:12px">${btn("Back up now","gdnow",{kind:"primary f1"})}${btn("Restore","gdrestore",{kind:"f1"})}</div></div>`}
 
+/* ================= Import / Export (backup file on this device) ================= */
+function ioCard(){
+  return `<div class="card" style="margin-top:12px;padding:12px 12px 12px 14px">
+  <div class="row" style="gap:12px"><div class="circle" style="width:38px;height:38px;background:var(--soft);color:var(--p)">${svg("swap")}</div>
+   <div class="grow"><div class="sb">Import / Export</div><div class="lbl" style="font-size:12px">Save or restore a backup file on this device</div></div></div>
+  <div class="row io" style="margin-top:10px">${btn("Export","ioexport",{kind:"primary f1",icon:"dl"})}${btn("Import","ioimport",{kind:"f1",icon:"expense"})}</div>
+  <input type="file" id="iofile" accept=".json,application/json" style="display:none"></div>`}
+/* Export: everything except the Google Drive sign-in state, as DigiLedger_Backup_YYYYMMDD.json */
+function ioExport(){const{gd,...data}=D;
+  download(`DigiLedger_Backup_${stamp()}.json`,new Blob([JSON.stringify({app:"DigiLedger",kind:"backup",version:1,exportedAt:now(),data},null,1)],{type:"application/json"}))}
+/* Import: check the file, show what it contains, and replace this device's data only after confirmation */
+async function ioImport(file){
+  if(!file)return;
+  if(file.size>20*1024*1024)return toast("This file is too large to be a DigiLedger backup.");
+  let j;try{j=JSON.parse(await file.text())}catch(e){return toast("This file is not a DigiLedger backup.")}
+  const d=j&&j.app==="DigiLedger"&&j.data?j.data:j;
+  if(!validBackup(d))return toast("This file is not a valid DigiLedger backup.");
+  const n=d.income.tx.length+d.expense.tx.length+d.customers.reduce((x,c)=>x+c.txs.length,0);
+  confirmDlg(`Import this backup${j.exportedAt?" from "+fmt(j.exportedAt):""}? It has ${n} transactions and ${d.customers.length} customers. All data currently in the app will be replaced.`,()=>{
+    D=Object.assign(blank(),d,{gd:D.gd,theme:D.theme});if(!Array.isArray(D.lastDeleted))D.lastDeleted=[];
+    save();S.open=null;S.fy=null;S._keepScroll=true;render();gdSchedule();toast("Backup imported")},"Import")}
 function settings(){
   const has=hasSample();
   return `<div class="screen" style="padding-bottom:64px">
   <div class="copyright">Copyright © 2026 DigiLedger</div>
   ${backupCard()}
+  ${ioCard()}
   ${itrCard()}
   <div class="card" style="margin-top:12px"><div class="sec" style="margin-bottom:4px">Test Data</div><div class="lbl">Adds 100 Income, 100 Expenditure and 100 Due transactions (25 customers) for trying the app. Removing deletes only these test entries.</div><div class="row" style="margin-top:10px">${btn(has?"Reload Test Data":"Load Test Data","loadsample",{kind:"primary f1"})}${btn("Remove Test Data","rmsample",{kind:"danger f1"})}</div></div>
   </div>`}
@@ -978,10 +1001,11 @@ const A={
  darkmode:()=>{S._keepScroll=true;const want=!isDark();update(d=>d.theme=want===mq.matches?"system":want?"dark":"light")},
  loadsample:()=>{update(d=>{removeSample();const x=sampleMore();d.income.tx.push(...sampleIncome(),...x.income);d.expense.tx.push(...sampleExpense(),...x.expense);d.customers.push(...x.customers)},true);toast("Test data loaded")},
  rmsample:()=>{if(!hasSample())return toast("No test data to remove");confirmDlg("Remove all test entries? Your own entries are not affected.",()=>{update(d=>removeSample());toast("Test data removed")},"Remove")},
- gdon:()=>gdConnect(),gdnow:()=>gdBackup(true),gdrestore:()=>gdRestore(),gdsignout:()=>gdSignOut()
+ gdon:()=>gdConnect(),gdnow:()=>gdBackup(true),gdrestore:()=>gdRestore(),gdsignout:()=>gdSignOut(),
+ ioexport:()=>ioExport(),ioimport:()=>{const f=document.getElementById("iofile");f.value="";f.click()}
 };
 document.addEventListener("click",e=>{const el=e.target.closest("[data-act]");if(!el)return;const f=A[el.dataset.act];if(f){e.preventDefault();f(el.dataset.arg||"")}});
-document.addEventListener("change",e=>{if(e.target.id==="fysel"){S.fy=+e.target.value;S._keepScroll=true;render()}});
+document.addEventListener("change",e=>{if(e.target.id==="iofile")ioImport(e.target.files[0]);if(e.target.id==="fysel"){S.fy=+e.target.value;S._keepScroll=true;render()}});
 document.addEventListener("input",e=>{if(e.target.id==="dq"){S.q=e.target.value;S.dlim=PAGE;document.getElementById("dlist").innerHTML=dueList()}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&ov.classList.contains("show"))closeOv();if(e.key==="Enter"&&e.target.id==="nc")A.addcat(S.tab==="income"?"income":"expense")});
 window.addEventListener("popstate",()=>{if(S.tab==="due"&&S.open){S.open=null;render()}});
