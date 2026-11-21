@@ -464,21 +464,24 @@ async function gdApi(url,opt={}){
 const gdPayload=()=>{const{gd,...data}=D;return JSON.stringify({app:"DigiLedger",kind:"backup",version:1,exportedAt:now(),data})};
 function gdRefresh(){if(S.tab==="settings"){S._keepScroll=true;render()}}
 const GD_FOLDER="DigiLedger",FOLDER_MIME="application/vnd.google-apps.folder";
-const gdQuery=async q=>(await (await gdApi(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&spaces=drive&orderBy=modifiedTime desc&fields=files(id,modifiedTime,parents)`)).json()).files||[];
-/* the "DigiLedger" folder in the user's Drive (created by the app if missing); cached in D.gd.folderId */
+const gdQuery=async q=>(await (await gdApi(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&spaces=drive&orderBy=modifiedTime desc&fields=files(id,name,modifiedTime,parents)`)).json()).files||[];
+/* RULE: every sign-in (turning Auto Backup on) gets its own new dated folder, e.g. "DigiLedger 2026-11-21",
+   with " (2)", " (3)"… added when that name already exists. Earlier DigiLedger folders are never touched.
+   The folder is kept in D.gd.folderId for the rest of that sign-in; if it is deleted, a new dated folder is made. */
 async function gdFolder(){
   /* folder/file IDs saved under another Client ID can't be opened with this one: start fresh */
   if(D.gd.cid!==GOOGLE_CLIENT_ID){D.gd.cid=GOOGLE_CLIENT_ID;D.gd.folderId=null;D.gd.fileId=null;GD.folderOk=null;GD.fileOk=null;save()}
   if(D.gd.folderId&&GD.folderOk===D.gd.folderId)return D.gd.folderId;
   if(D.gd.folderId){const r=await gdApi(`https://www.googleapis.com/drive/v3/files/${D.gd.folderId}?fields=id,trashed`);
     if(r.status!==404&&!(await r.json()).trashed){GD.folderOk=D.gd.folderId;return D.gd.folderId}}
-  let id=(await gdQuery(`name='${GD_FOLDER}' and mimeType='${FOLDER_MIME}' and trashed=false`))[0]?.id;
-  if(!id){const r=await gdApi("https://www.googleapis.com/drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:GD_FOLDER,mimeType:FOLDER_MIME})});id=(await r.json()).id}
-  D.gd.folderId=id;GD.folderOk=id;save();return id}
-/* latest backup file: inside the DigiLedger folder first, then anywhere (older versions saved it in My Drive) */
-async function gdFind(){
-  const f=await gdFolder();
-  return(await gdQuery(`name='${GD_FILE}' and '${f}' in parents and trashed=false`))[0]||(await gdQuery(`name='${GD_FILE}' and trashed=false`))[0]||null}
+  const base=`${GD_FOLDER} ${dayKey(new Date())}`;
+  const taken=new Set((await gdQuery(`name contains '${base}' and mimeType='${FOLDER_MIME}' and trashed=false`)).map(x=>x.name));
+  let name=base;for(let i=2;taken.has(name);i++)name=`${base} (${i})`;
+  const r=await gdApi("https://www.googleapis.com/drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,mimeType:FOLDER_MIME,description:"DigiLedger automatic backup"})});
+  const id=(await r.json()).id;
+  D.gd.folderId=id;D.gd.folderName=name;D.gd.fileId=null;GD.folderOk=id;GD.fileOk=null;save();return id}
+/* latest DigiLedger backup in any of the app's folders (used to offer Restore) */
+async function gdFind(){return(await gdQuery(`name='${GD_FILE}' and trashed=false`))[0]||null}
 async function gdUpload(){
   const body=gdPayload(),folder=await gdFolder();let id=D.gd.fileId;
   /* once per session: make sure the saved file still exists, isn't in the bin, and sits in the DigiLedger folder */
@@ -524,14 +527,14 @@ function choiceDlg(title,msg,a,b,onA,onB){
 async function gdConnect(){
   if(!GOOGLE_CLIENT_ID)return gdSetupInfo();
   try{await gdToken("select_account")}catch(e){return toast(e.message)}
-  GD.busy=true;GD.err="";D.gd={on:true,email:"",fileId:null,last:null,pending:true};save();gdRefresh();
+  GD.busy=true;GD.err="";GD.folderOk=null;GD.fileOk=null;D.gd={on:true,email:"",fileId:null,folderId:null,cid:GOOGLE_CLIENT_ID,last:null,pending:true};save();gdRefresh();
   try{
     const u=await(await gdApi("https://www.googleapis.com/oauth2/v3/userinfo")).json();D.gd.email=u.email||"";
     const f=await gdFind();
-    if(f){D.gd.fileId=f.id;save();GD.busy=false;gdRefresh();
+    if(f){GD.busy=false;gdRefresh();
       return choiceDlg("Backup found",`${D.gd.email||"This Google account"} already has a DigiLedger backup from ${fmt(ISO(new Date(f.modifiedTime)))}. Which data do you want to keep?`,
         "Restore backup from Drive","Keep this device’s data",
-        async()=>{GD.busy=true;gdRefresh();try{const{data}=await gdDownload(f.id);gdApply(data);toast("Backup restored. Auto Backup is on.")}catch(e){GD.err=e.message}finally{GD.busy=false;gdRefresh()}},
+        async()=>{GD.busy=true;gdRefresh();try{const{data}=await gdDownload(f.id);gdApply(data);await gdUpload();toast("Backup restored. Auto Backup is on.")}catch(e){GD.err=e.message}finally{GD.busy=false;gdRefresh()}},
         ()=>gdBackup(true))}
     await gdUpload();toast("Auto Backup is on")}
   catch(e){GD.err=e.message}
@@ -561,7 +564,7 @@ function backupCard(){
     <button class="btn primary" style="min-height:40px;padding:6px 16px;flex:none" data-act="gdon">Turn On</button></div></div>`;
   const status=GD.busy?`<span style="color:var(--p)">Backing up…</span>`:GD.err?`<span class="r">${esc(GD.err)}</span>`:g.pending&&!gdTokenOk()&&g.last?`<span style="color:var(--a,#B7791F)">Backup pending — tap Back up now</span>`:g.last?"Last backup: "+fmt(g.last):"Not backed up yet";
   return `<div class="card"><div class="row top"><div class="circle" style="width:44px;height:44px;background:var(--p);color:var(--pt)">${svg("cloud")}</div><div class="grow" style="padding-left:12px"><div class="row"><span class="sb grow">Auto Backup</span><span style="font-size:12px;font-weight:700;color:var(--g);background:var(--soft);padding:3px 10px;border-radius:10px">ON</span>${ib("gdsignout","logout","r","Sign out and stop Auto Backup","","s40 signout")}</div>
-    <div class="lbl" style="word-break:break-all">Google Drive${g.email?" · "+esc(g.email):""}</div><div style="font-size:13px;margin-top:4px">${status}</div></div></div>
+    <div class="lbl" style="word-break:break-all">Google Drive${g.email?" · "+esc(g.email):""}</div>${g.folderName?`<div class="lbl" style="font-size:12px">Folder: ${esc(g.folderName)}</div>`:""}<div style="font-size:13px;margin-top:4px">${status}</div></div></div>
     <div class="row" style="margin-top:12px">${btn("Back up now","gdnow",{kind:"primary f1"})}${btn("Restore","gdrestore",{kind:"f1"})}</div></div>`}
 
 function settings(){
